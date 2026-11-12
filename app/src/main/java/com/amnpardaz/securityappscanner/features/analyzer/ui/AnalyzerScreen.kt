@@ -1,9 +1,11 @@
 package com.amnpardaz.securityappscanner.features.analyzer.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Refresh
@@ -37,6 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,32 +64,46 @@ fun AnalyzerScreen(
     viewModel: AnalyzerViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedApp by remember { mutableStateOf<AppInformation?>(null) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        HeaderSection(
-            isScanning = uiState is AppsUiState.Loading,
-            onScanClick = { viewModel.loadInstalledApps() },
+    if (selectedApp != null) {
+        AppInformationDetailScreen(
+            app = selectedApp!!,
+            modifier = modifier,
+            onBackClick = { selectedApp = null }
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            when (val state = uiState) {
-                is AppsUiState.Initial -> InitialStateView(onScanClick = { viewModel.loadInstalledApps() })
-                is AppsUiState.Loading -> LoadingStateView()
-                is AppsUiState.Success -> SuccessStateView(apps = state.apps)
-                is AppsUiState.Error -> ErrorStateView(
-                    message = state.message,
-                    onRetryClick = { viewModel.loadInstalledApps() },
-                )
+            HeaderSection(
+                isScanning = uiState is AppsUiState.Loading,
+                onScanClick = { viewModel.loadInstalledApps() },
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                when (val state = uiState) {
+                    is AppsUiState.Initial -> InitialStateView(
+                        onScanClick = { viewModel.loadInstalledApps() }
+                    )
+                    is AppsUiState.Loading -> LoadingStateView()
+                    is AppsUiState.Success -> SuccessStateView(
+                        apps = state.apps,
+                        onAppClick = { selectedApp = it }
+                    )
+                    is AppsUiState.Error -> ErrorStateView(
+                        message = state.message,
+                        onRetryClick = { viewModel.loadInstalledApps() },
+                    )
+                }
             }
         }
     }
@@ -240,7 +260,10 @@ private fun LoadingStateView() {
 }
 
 @Composable
-private fun SuccessStateView(apps: List<AppInformation>) {
+private fun SuccessStateView(
+    apps: List<AppInformation>,
+    onAppClick: (AppInformation) -> Unit,
+) {
     val highRiskCount = apps.count { it.riskLevel == RiskLevel.HIGH }
     val mediumRiskCount = apps.count { it.riskLevel == RiskLevel.MEDIUM }
     val lowRiskCount = apps.count { it.riskLevel == RiskLevel.LOW }
@@ -290,7 +313,7 @@ private fun SuccessStateView(apps: List<AppInformation>) {
                 items = apps,
                 key = { it.packageName },
             ) { app ->
-                AppItemCard(app = app)
+                AppItemCard(app = app, onClick = { onAppClick(app) })
             }
         }
     }
@@ -334,9 +357,10 @@ private fun SummaryChip(
 private fun AppItemCard(
     app: AppInformation,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
 ) {
     OutlinedCard(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
     ) {
         Row(
@@ -490,6 +514,337 @@ private fun ErrorStateView(
     }
 }
 
+
+
+// -----------------------------------------------------------------------------
+// App details screen
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun AppInformationDetailScreen(
+    app: AppInformation,
+    modifier: Modifier = Modifier,
+    onBackClick: () -> Unit,
+) {
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 16.dp,
+            vertical = 12.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clickable(onClick = onBackClick),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Text(
+                    text = "Application details",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        item { AppDetailHeader(app) }
+        item { AppDetailRiskCard(app) }
+        item { AppDetailMetadataCard(app) }
+        item { AppDetailSecurityCard(app) }
+        item { AppDetailPermissionsCard(app) }
+    }
+}
+
+@Composable
+private fun AppDetailHeader(app: AppInformation) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(60.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = app.appName.take(1).uppercase(),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = app.appName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = app.packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Version ${app.versionName ?: "Unknown"} (${app.versionCode})",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppDetailRiskCard(app: AppInformation) {
+    val (containerColor, contentColor, icon) = when (app.riskLevel) {
+        RiskLevel.HIGH -> Triple(
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+            Icons.Default.Warning
+        )
+        RiskLevel.MEDIUM -> Triple(
+            Color(0xFFFFF3E0),
+            Color(0xFFE65100),
+            Icons.Default.ErrorOutline
+        )
+        RiskLevel.LOW -> Triple(
+            Color(0xFFE8F5E9),
+            Color(0xFF2E7D32),
+            Icons.Default.CheckCircle
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "${app.riskLevel.name} RISK",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor
+                )
+            }
+
+            if (app.riskReasons.isEmpty()) {
+                Text(
+                    text = "No risk reasons provided.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = contentColor
+                )
+            } else {
+                Text(
+                    text = "Risk reasons",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor
+                )
+                app.riskReasons.forEach { reason ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("•", color = contentColor)
+                        Text(
+                            text = reason,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppDetailMetadataCard(app: AppInformation) {
+    val installDate = remember(app.firstInstallTime) {
+        java.text.SimpleDateFormat(
+            "MMM dd, yyyy",
+            java.util.Locale.getDefault()
+        ).format(java.util.Date(app.firstInstallTime))
+    }
+
+    AppDetailCard(title = "Application information") {
+        AppDetailRow("Package name", app.packageName)
+        AppDetailRow("Version name", app.versionName ?: "Unknown")
+        AppDetailRow("Version code", app.versionCode.toString())
+        AppDetailRow("First installed", installDate)
+        AppDetailRow("Install source", app.installSource ?: "Unknown")
+    }
+}
+
+@Composable
+private fun AppDetailSecurityCard(app: AppInformation) {
+    AppDetailCard(title = "Security indicators") {
+        AppDetailBooleanRow("System application", app.isSystemApp)
+        AppDetailBooleanRow(
+            title = "Sideloaded",
+            value = app.isSideloaded,
+            warningWhenTrue = true
+        )
+        AppDetailBooleanRow(
+            title = "Debuggable",
+            value = app.isDebuggable,
+            warningWhenTrue = true
+        )
+    }
+}
+
+@Composable
+private fun AppDetailBooleanRow(
+    title: String,
+    value: Boolean,
+    warningWhenTrue: Boolean = false
+) {
+    val valueColor = if (value && warningWhenTrue) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = if (value) "Yes" else "No",
+            color = valueColor,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun AppDetailPermissionsCard(app: AppInformation) {
+    AppDetailCard(title = "Requested permissions") {
+        Text(
+            text = "${app.requestedPermissions.size} permissions requested",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (app.requestedPermissions.isEmpty()) {
+            Text(
+                text = "No permissions requested.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        } else {
+            app.requestedPermissions.forEach { permission ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = permission.toString(),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                androidx.compose.material3.HorizontalDivider()
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppDetailCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            androidx.compose.material3.HorizontalDivider()
+            content()
+        }
+    }
+}
+
+@Composable
+private fun AppDetailRow(title: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun InitialStatePreview() {
@@ -497,3 +852,4 @@ private fun InitialStatePreview() {
         InitialStateView(onScanClick = {})
     }
 }
+
