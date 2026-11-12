@@ -1,5 +1,3 @@
-// Add your app's package declaration here, then import your AppInformation,
-// PermissionInformation, and RiskLevel model classes.
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
